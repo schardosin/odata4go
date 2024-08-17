@@ -1,12 +1,14 @@
 package odata
 
 import (
+	"log"
 	"net/http"
 	"reflect"
 	"strings"
 )
 
 func handleGetMetadata(w http.ResponseWriter, r *http.Request) {
+	log.Println("Handling GET request for entitySet: $metadata")
 	w.Header().Set("Content-Type", "application/xml")
 	w.Header().Set("OData-Version", "4.0")
 	metadata := generateMetadata()
@@ -127,12 +129,17 @@ func generateNavigationPropertyMetadata(field reflect.StructField, parentTypeNam
 	metadata += `"`
 
 	// Add Partner if it exists
+	partnerFound := false
 	for _, partnerRelationships := range entityRelationships {
 		for partnerRelationship, partnerRelInfo := range partnerRelationships {
 			if partnerRelInfo.TargetEntity == parentTypeName {
 				metadata += ` Partner="` + partnerRelationship + `"`
+				partnerFound = true
 				break
 			}
+		}
+		if partnerFound {
+			break
 		}
 	}
 

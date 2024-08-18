@@ -118,6 +118,10 @@ func ApplySkipTop(entities interface{}, skip, top string) interface{} {
 }
 
 func ApplyExpand(entities interface{}, expand string, handler ExpandHandler) interface{} {
+	if expand != "" {
+		log.Printf("ApplyExpandSingle called with expand: %s", expand)
+	}
+
 	if expand == "" || handler == nil {
 		return entities
 	}
@@ -139,20 +143,18 @@ func ApplyExpand(entities interface{}, expand string, handler ExpandHandler) int
 }
 
 func ApplyExpandSingle(entity interface{}, expand string, handler ExpandHandler) OrderedFields {
-	log.Printf("ApplyExpandSingle called with expand: %s", expand)
 	result := EntityToOrderedFields(entity, expand)
 	if expand == "" {
 		return result
 	}
 
-	expandParts := parseExpandQuery(expand)
-	log.Printf("Parsed expand parts: %+v", expandParts)
-	
+	expandParts := parseExpandQuery(expand)	
 	for relationshipName, nestedExpand := range expandParts {
-		log.Printf("Processing relationship: %s with nested expand: %s", relationshipName, nestedExpand)
+		if nestedExpand != "" {
+			log.Printf("Processing relationship: %s with nested expand: %s", relationshipName, nestedExpand)
+		}
 		expandedEntity := handler.ExpandEntity(entity, relationshipName)
 		if expandedEntity != nil {
-			log.Printf("Expanded entity for %s: %+v", relationshipName, expandedEntity)
 			// Remove the existing field if it exists
 			for i, field := range result {
 				if field.Key == relationshipName {
@@ -187,7 +189,6 @@ func ApplyExpandSingle(entity interface{}, expand string, handler ExpandHandler)
 					// Add the expanded result
 					result = append(result, struct{Key string; Value interface{}}{relationshipName, expandedSlice})
 				} else {
-					log.Printf("Expanded entity is a single entity")
 					// Handle one-to-one relationship
 					expandedOrderedFields := ApplyExpandSingle(expandedEntity, nestedExpand, nestedHandler.ExpandHandler)
 					result = append(result, struct{Key string; Value interface{}}{relationshipName, expandedOrderedFields})
@@ -275,37 +276,32 @@ func ApplySelect(entities interface{}, selectQuery string) interface{} {
 		return entities
 	}
 
-	log.Printf("ApplySelect: Input entities: %+v", entities)
-	log.Printf("ApplySelect: Select query: %s", selectQuery)
-
 	selectedFields := strings.Split(selectQuery, ",")
 	for i := range selectedFields {
 		selectedFields[i] = strings.TrimSpace(selectedFields[i])
 	}
 
-	log.Printf("ApplySelect: Selected fields: %v", selectedFields)
+	entitiesType := reflect.TypeOf(entities)
+	if entitiesType.Kind() == reflect.Slice {
+		entityType := entitiesType.Elem()
+		log.Printf("ApplySelect: Processing entities of type: %s", entityType.Name())
 
-	entitiesValue := reflect.ValueOf(entities)
-	if entitiesValue.Kind() == reflect.Slice {
+		entitiesValue := reflect.ValueOf(entities)
 		result := make([]OrderedFields, 0, entitiesValue.Len())
 		for i := 0; i < entitiesValue.Len(); i++ {
 			entity := entitiesValue.Index(i).Interface()
 			selectedEntity := ApplySelectSingle(EntityToOrderedFields(entity, ""), selectedFields)
 			result = append(result, selectedEntity)
 		}
-		log.Printf("ApplySelect: Result: %+v", result)
 		return result
 	} else {
+		log.Printf("ApplySelect: Processing single entity of type: %s", entitiesType.Name())
 		result := ApplySelectSingle(EntityToOrderedFields(entities, ""), selectedFields)
-		log.Printf("ApplySelect: Result for single entity: %+v", result)
 		return result
 	}
 }
 
 func ApplySelectSingle(entity OrderedFields, selectedFields []string) OrderedFields {
-	log.Printf("ApplySelectSingle: Input entity: %+v", entity)
-	log.Printf("ApplySelectSingle: Selected fields: %v", selectedFields)
-
 	if len(selectedFields) == 0 {
 		return entity
 	}
@@ -321,7 +317,6 @@ func ApplySelectSingle(entity OrderedFields, selectedFields []string) OrderedFie
 		}
 	}
 
-	log.Printf("ApplySelectSingle: Result: %+v", result)
 	return result
 }
 

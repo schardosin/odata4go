@@ -308,35 +308,49 @@ func ApplySelectSingle(entity OrderedFields, selectedFields []string) OrderedFie
 
 	result := make(OrderedFields, 0, len(selectedFields))
 
-	for _, field := range selectedFields {
-		fieldParts := strings.Split(field, "/")
-		for _, kv := range entity {
-			if strings.EqualFold(kv.Key, fieldParts[0]) {
-				if len(fieldParts) > 1 {
-					// Handle nested selection
-					switch v := kv.Value.(type) {
-					case OrderedFields:
-						nestedResult := ApplySelectSingle(v, []string{strings.Join(fieldParts[1:], "/")})
-						result = append(result, struct{Key string; Value interface{}}{kv.Key, nestedResult})
-					case []OrderedFields:
-						nestedSlice := make([]OrderedFields, len(v))
-						for i, item := range v {
-							nestedSlice[i] = ApplySelectSingle(item, []string{strings.Join(fieldParts[1:], "/")})
+	for _, kv := range entity {
+		if isExpandedEntity(kv.Value) {
+			// Always include expanded entities
+			result = append(result, kv)
+		} else {
+			for _, field := range selectedFields {
+				fieldParts := strings.Split(field, "/")
+				if strings.EqualFold(kv.Key, fieldParts[0]) {
+					if len(fieldParts) > 1 {
+						// Handle nested selection
+						switch v := kv.Value.(type) {
+						case OrderedFields:
+							nestedResult := ApplySelectSingle(v, []string{strings.Join(fieldParts[1:], "/")})
+							result = append(result, struct{Key string; Value interface{}}{kv.Key, nestedResult})
+						case []OrderedFields:
+							nestedSlice := make([]OrderedFields, len(v))
+							for i, item := range v {
+								nestedSlice[i] = ApplySelectSingle(item, []string{strings.Join(fieldParts[1:], "/")})
+							}
+							result = append(result, struct{Key string; Value interface{}}{kv.Key, nestedSlice})
+						default:
+							// If it's not an OrderedFields or []OrderedFields, just add it as is
+							result = append(result, kv)
 						}
-						result = append(result, struct{Key string; Value interface{}}{kv.Key, nestedSlice})
-					default:
-						// If it's not an OrderedFields or []OrderedFields, just add it as is
+					} else {
 						result = append(result, kv)
 					}
-				} else {
-					result = append(result, kv)
+					break
 				}
-				break
 			}
 		}
 	}
 
 	return result
+}
+
+func isExpandedEntity(value interface{}) bool {
+	switch value.(type) {
+	case OrderedFields, []OrderedFields:
+		return true
+	default:
+		return false
+	}
 }
 
 func EntityToOrderedFields(entity interface{}, expand string) OrderedFields {

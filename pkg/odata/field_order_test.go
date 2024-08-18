@@ -26,7 +26,7 @@ func TestFieldOrder(t *testing.T) {
 	assert.NoError(t, err, "Failed to unmarshal response: %v", err)
 
 	// Expected order of fields
-	expectedOrder := []string{"@odata.context", "ID", "Name", "Description", "Price", "Category_ID"}
+	expectedOrder := []string{"@odata.context", "ID", "Name", "Description", "Price", "Category_ID", "Supplier_ID"}
 
 	// Check if all expected fields are present and in the correct order
 	assert.Equal(t, len(expectedOrder), len(responseMap), "Expected %d fields, got %d", len(expectedOrder), len(responseMap))

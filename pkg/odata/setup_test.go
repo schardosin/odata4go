@@ -13,6 +13,8 @@ type TestProducts struct {
 	Price       float64     `json:"Price"`
 	Category_ID  string      `json:"Category_ID" odata:"ref:Categories"`
 	Category    *TestCategories `json:"Category,omitempty" odata:"expand:Category"`
+	Supplier_ID  string      `json:"Supplier_ID" oSuppliers"`
+    Supplier     *TestSuppliers  `json:"Supplier,omitempty" odata:"expand:Supplier"`
 }
 
 func (p TestProducts) EntityName() string {
@@ -41,6 +43,23 @@ func (c TestCategories) GetRelationships() map[string]string {
 	}
 }
 
+type TestSuppliers struct {
+    ID       string     `json:"ID" odata:"key"`
+    Name     string     `json:"Name"`
+    Country  string     `json:"Country"`
+    Products []TestProducts `json:"Products,omitempty" odata:"expand:Products"`
+}
+
+func (s TestSuppliers) EntityName() string {
+    return "Suppliers"
+}
+
+func (s TestSuppliers) GetRelationships() map[string]string {
+    return map[string]string{
+        "Products": "Products",
+    }
+}
+
 var testProducts = []TestProducts{
 	{
 		ID:          "1",
@@ -48,6 +67,7 @@ var testProducts = []TestProducts{
 		Description: "Description A",
 		Price:       100.0,
 		Category_ID:  "1",
+		Supplier_ID: "1",
 	},
 	{
 		ID:          "2",
@@ -55,6 +75,7 @@ var testProducts = []TestProducts{
 		Description: "Description B",
 		Price:       200.0,
 		Category_ID:  "1",
+		Supplier_ID: "2",
 	},
 	{
 		ID:          "3",
@@ -62,12 +83,18 @@ var testProducts = []TestProducts{
 		Description: "Description C",
 		Price:       300.0,
 		Category_ID:  "2",
+		Supplier_ID: "1",
 	},
 }
 
 var testCategories = []TestCategories{
 	{ID: "1", Name: "Electronics"},
 	{ID: "2", Name: "Books"},
+}
+
+var testSuppliers = []TestSuppliers{
+    {ID: "1", Name: "Supplier A", Country: "USA"},
+    {ID: "2", Name: "Supplier B", Country: "Canada"},
 }
 
 type TestProductHandler struct{}
@@ -85,36 +112,15 @@ func (h TestProductHandler) ExpandEntity(entity interface{}, relationshipName st
                 return category
             }
         }
-    }
+    case "Supplier":
+        for _, supplier := range testSuppliers {
+            if supplier.ID == product.Supplier_ID {
+                return supplier
+            }
+        }
+	}
     return nil
 }
-
-// func (h TestProductHandler) ExpandEntity(entity interface{}, relationshipName string) interface{} {
-// 	product, ok := entity.(TestProducts)
-// 	if !ok {
-// 		productMap, ok := entity.(map[string]interface{})
-// 		if !ok {
-// 			return nil
-// 		}
-// 		product = TestProducts{
-// 			ID:         productMap["ID"].(string),
-// 			Category_ID: productMap["Category_ID"].(string),
-// 		}
-// 	}
-
-// 	if relationshipName == "Category" {
-// 		for _, category := range testCategories {
-// 			if category.ID == product.Category_ID {
-// 				return map[string]interface{}{
-// 					"ID":   category.ID,
-// 					"Name": category.Name,
-// 				}
-// 			}
-// 		}
-// 	}
-
-// 	return nil
-// }
 
 type TestCategoryExpandHandler struct{}
 
@@ -137,30 +143,26 @@ func (h TestCategoryExpandHandler) ExpandEntity(entity interface{}, relationship
     return nil
 }
 
-// func (h TestCategoryExpandHandler) ExpandEntity(entity interface{}, relationshipName string) interface{} {
-// 	category, ok := entity.(TestCategories)
-// 	if !ok {
-// 		return nil
-// 	}
+type TestSupplierExpandHandler struct{}
 
-// 	switch relationshipName {
-// 	case "Products":
-// 		var categoryProducts []map[string]interface{}
-// 		for _, product := range testProducts {
-// 			if product.Category_ID == category.ID {
-// 				categoryProducts = append(categoryProducts, map[string]interface{}{
-// 					"ID":          product.ID,
-// 					"Name":        product.Name,
-// 					"Description": product.Description,
-// 					"Price":       product.Price,
-// 					"Category_ID": product.Category_ID,
-// 				})
-// 			}
-// 		}
-// 		return categoryProducts
-// 	}
-// 	return nil
-// }
+func (h TestSupplierExpandHandler) ExpandEntity(entity interface{}, relationshipName string) interface{} {
+    supplier, ok := entity.(TestSuppliers)
+    if !ok {
+        return nil
+    }
+
+    switch relationshipName {
+    case "Products":
+        var supplierProducts []TestProducts
+        for _, product := range testProducts {
+            if product.Supplier_ID == supplier.ID {
+                supplierProducts = append(supplierProducts, product)
+            }
+        }
+        return supplierProducts
+    }
+    return nil
+}
 
 func setupTestRouter() *chi.Mux {
 	r := chi.NewRouter()
@@ -208,7 +210,9 @@ func setupTestRouter() *chi.Mux {
 		ExpandHandler: categoryHandler,
 	})
 	RegisterEntityRelationship("Products", "Category", "TestCategories", "one-to-one")
+	RegisterEntityRelationship("Products", "Supplier", "TestSuppliers", "one-to-one")
 	RegisterEntityRelationship("Categories", "Products", "TestProducts", "one-to-many")
+	RegisterEntityRelationship("Suppliers", "Products", "TestProducts", "one-to-many")
 	RegisterRoutes(r)
 	return r
 }

@@ -130,4 +130,55 @@ func TestExpand(t *testing.T) {
 			assert.NotEmpty(t, productMap["Name"], "Expected Product to have a Name")
 		}
 	})
+
+	t.Run("Complex nested expand", func(t *testing.T) {
+		req, _ := http.NewRequest("GET", "/odata/v4/Products?$expand=Supplier,Category($expand=Products($expand=Supplier))", nil)
+		w := httptest.NewRecorder()
+		r.ServeHTTP(w, req)
+
+		assert.Equal(t, http.StatusOK, w.Code)
+
+		var response map[string]interface{}
+		err := json.Unmarshal(w.Body.Bytes(), &response)
+		assert.NoError(t, err)
+
+		values, ok := response["value"].([]interface{})
+		assert.True(t, ok, "Expected 'value' to be a slice")
+		assert.NotEmpty(t, values, "Expected at least one product in the response")
+
+		for _, entity := range values {
+			productMap, ok := entity.(map[string]interface{})
+			assert.True(t, ok, "Expected product to be a map")
+
+			// Check Supplier
+			supplier, ok := productMap["Supplier"].(map[string]interface{})
+			assert.True(t, ok, "Expected Supplier to be present and be a map")
+			assert.NotEmpty(t, supplier["ID"], "Expected Supplier to have an ID")
+			assert.NotEmpty(t, supplier["Name"], "Expected Supplier to have a Name")
+
+			// Check Category
+			category, ok := productMap["Category"].(map[string]interface{})
+			assert.True(t, ok, "Expected Category to be present and be a map")
+			assert.NotEmpty(t, category["ID"], "Expected Category to have an ID")
+			assert.NotEmpty(t, category["Name"], "Expected Category to have a Name")
+
+			// Check Products inside Category
+			categoryProducts, ok := category["Products"].([]interface{})
+			assert.True(t, ok, "Expected Category.Products to be present and be a slice")
+			assert.NotEmpty(t, categoryProducts, "Expected Category to have at least one Product")
+
+			for _, nestedProduct := range categoryProducts {
+				nestedProductMap, ok := nestedProduct.(map[string]interface{})
+				assert.True(t, ok, "Expected nested product to be a map")
+				assert.NotEmpty(t, nestedProductMap["ID"], "Expected nested Product to have an ID")
+				assert.NotEmpty(t, nestedProductMap["Name"], "Expected nested Product to have a Name")
+
+				// Check Supplier of nested Product
+				nestedSupplier, ok := nestedProductMap["Supplier"].(map[string]interface{})
+				assert.True(t, ok, "Expected nested Product.Supplier to be present and be a map")
+				assert.NotEmpty(t, nestedSupplier["ID"], "Expected nested Product.Supplier to have an ID")
+				assert.NotEmpty(t, nestedSupplier["Name"], "Expected nested Product.Supplier to have a Name")
+			}
+		}
+	})
 }

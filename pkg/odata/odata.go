@@ -309,9 +309,28 @@ func ApplySelectSingle(entity OrderedFields, selectedFields []string) OrderedFie
 	result := make(OrderedFields, 0, len(selectedFields))
 
 	for _, field := range selectedFields {
+		fieldParts := strings.Split(field, "/")
 		for _, kv := range entity {
-			if strings.EqualFold(kv.Key, field) {
-				result = append(result, kv)
+			if strings.EqualFold(kv.Key, fieldParts[0]) {
+				if len(fieldParts) > 1 {
+					// Handle nested selection
+					switch v := kv.Value.(type) {
+					case OrderedFields:
+						nestedResult := ApplySelectSingle(v, []string{strings.Join(fieldParts[1:], "/")})
+						result = append(result, struct{Key string; Value interface{}}{kv.Key, nestedResult})
+					case []OrderedFields:
+						nestedSlice := make([]OrderedFields, len(v))
+						for i, item := range v {
+							nestedSlice[i] = ApplySelectSingle(item, []string{strings.Join(fieldParts[1:], "/")})
+						}
+						result = append(result, struct{Key string; Value interface{}}{kv.Key, nestedSlice})
+					default:
+						// If it's not an OrderedFields or []OrderedFields, just add it as is
+						result = append(result, kv)
+					}
+				} else {
+					result = append(result, kv)
+				}
 				break
 			}
 		}
@@ -326,30 +345,36 @@ func EntityToOrderedFields(entity interface{}, expand string) OrderedFields {
 		val = val.Elem()
 	}
 
-	if val.Kind() != reflect.Struct {
-		return nil
-	}
+	switch val.Kind() {
+	case reflect.Struct:
+		typ := val.Type()
+		result := make(OrderedFields, 0, val.NumField())
 
-	typ := val.Type()
-	result := make(OrderedFields, 0, val.NumField())
-
-	for i := 0; i < val.NumField(); i++ {
-		field := typ.Field(i)
-		fieldValue := val.Field(i)
-		
-		// Check if the field is expandable
-		odataTag := field.Tag.Get("odata")
-		if strings.HasPrefix(odataTag, "expand:") {
-			expandField := strings.TrimPrefix(odataTag, "expand:")
-			if expand == "" || !containsField(expand, expandField) {
-				continue // Skip this field if it's not expanded
+		for i := 0; i < val.NumField(); i++ {
+			field := typ.Field(i)
+			fieldValue := val.Field(i)
+			
+			// Check if the field is expandable
+			odataTag := field.Tag.Get("odata")
+			if strings.HasPrefix(odataTag, "expand:") {
+				expandField := strings.TrimPrefix(odataTag, "expand:")
+				if expand == "" || !containsField(expand, expandField) {
+					continue // Skip this field if it's not expanded
+				}
 			}
+			
+			result = append(result, struct{Key string; Value interface{}}{field.Name, fieldValue.Interface()})
 		}
-		
-		result = append(result, struct{Key string; Value interface{}}{field.Name, fieldValue.Interface()})
+		return result
+
+	case reflect.Slice:
+		if orderedFields, ok := val.Interface().(OrderedFields); ok {
+			return orderedFields
+		}
 	}
 
-	return result
+	// If it's not a struct or OrderedFields, return nil
+	return nil
 }
 
 // Helper function to check if a field is in the expand query

@@ -139,17 +139,20 @@ func ApplyExpand(entities interface{}, expand string, handler ExpandHandler) int
 }
 
 func ApplyExpandSingle(entity interface{}, expand string, handler ExpandHandler) OrderedFields {
+	log.Printf("ApplyExpandSingle called with expand: %s", expand)
 	result := EntityToOrderedFields(entity, expand)
 	if expand == "" {
 		return result
 	}
 
-	expandParts := strings.Split(expand, ",")
+	expandParts := parseExpandQuery(expand)
+	log.Printf("Parsed expand parts: %+v", expandParts)
 	
-	for _, part := range expandParts {
-		relationshipName := strings.TrimSpace(part)
+	for relationshipName, nestedExpand := range expandParts {
+		log.Printf("Processing relationship: %s with nested expand: %s", relationshipName, nestedExpand)
 		expandedEntity := handler.ExpandEntity(entity, relationshipName)
 		if expandedEntity != nil {
+			log.Printf("Expanded entity for %s: %+v", relationshipName, expandedEntity)
 			// Remove the existing field if it exists
 			for i, field := range result {
 				if field.Key == relationshipName {
@@ -161,22 +164,80 @@ func ApplyExpandSingle(entity interface{}, expand string, handler ExpandHandler)
 			// Check if the expanded entity is a slice (one-to-many relationship)
 			expandedValue := reflect.ValueOf(expandedEntity)
 			if expandedValue.Kind() == reflect.Slice {
+				log.Printf("Expanded entity is a slice with %d elements", expandedValue.Len())
 				// Convert each item in the slice to OrderedFields
 				expandedSlice := make([]OrderedFields, expandedValue.Len())
 				for i := 0; i < expandedValue.Len(); i++ {
-					expandedSlice[i] = EntityToOrderedFields(expandedValue.Index(i).Interface(), "")
+					expandedSlice[i] = ApplyExpandSingle(expandedValue.Index(i).Interface(), nestedExpand, handler)
 				}
 				// Add the expanded result
 				result = append(result, struct{Key string; Value interface{}}{relationshipName, expandedSlice})
 			} else {
+				log.Printf("Expanded entity is a single entity")
 				// Handle one-to-one relationship
-				expandedOrderedFields := EntityToOrderedFields(expandedEntity, "")
+				expandedOrderedFields := ApplyExpandSingle(expandedEntity, nestedExpand, handler)
 				result = append(result, struct{Key string; Value interface{}}{relationshipName, expandedOrderedFields})
+			}
+		} else {
+			log.Printf("ExpandEntity returned nil for %s", relationshipName)
+		}
+	}
+
+	log.Printf("Final result: %+v", result)
+	return result
+}
+
+func parseExpandQuery(expand string) map[string]string {
+	expandParts := make(map[string]string)
+	currentKey := ""
+	nestedLevel := 0
+	var currentValue strings.Builder
+
+	for _, char := range expand {
+		switch char {
+		case '(':
+			if nestedLevel == 0 {
+				currentValue.WriteRune(char)
+			}
+			nestedLevel++
+		case ')':
+			nestedLevel--
+			if nestedLevel == 0 {
+				currentValue.WriteRune(char)
+				expandParts[currentKey] = strings.TrimPrefix(strings.TrimSuffix(currentValue.String(), ")"), "($expand=")
+				currentKey = ""
+				currentValue.Reset()
+			} else {
+				currentValue.WriteRune(char)
+			}
+		case ',':
+			if nestedLevel == 0 {
+				if currentKey != "" {
+					expandParts[currentKey] = currentValue.String()
+				}
+				currentKey = ""
+				currentValue.Reset()
+			} else {
+				currentValue.WriteRune(char)
+			}
+		default:
+			if nestedLevel == 0 {
+				if currentValue.Len() == 0 {
+					currentKey += string(char)
+				} else {
+					currentValue.WriteRune(char)
+				}
+			} else {
+				currentValue.WriteRune(char)
 			}
 		}
 	}
 
-	return result
+	if currentKey != "" {
+		expandParts[currentKey] = currentValue.String()
+	}
+
+	return expandParts
 }
 
 func ApplySelect(entities interface{}, selectQuery string) interface{} {

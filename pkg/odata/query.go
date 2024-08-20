@@ -43,7 +43,7 @@ func ApplyExpand(entities interface{}, expand string, handler ExpandHandler) int
 
 	expandedEntities := reflect.ValueOf(entities)
 	if expandedEntities.Kind() == reflect.Slice {
-		result := make([]OrderedFields, 0, expandedEntities.Len())
+		result := make([]map[string]interface{}, 0, expandedEntities.Len())
 
 		for i := 0; i < expandedEntities.Len(); i++ {
 			entity := expandedEntities.Index(i).Interface()
@@ -57,8 +57,8 @@ func ApplyExpand(entities interface{}, expand string, handler ExpandHandler) int
 	}
 }
 
-func ApplyExpandSingle(entity interface{}, expand string, handler ExpandHandler) OrderedFields {
-	result := EntityToOrderedFields(entity, expand)
+func ApplyExpandSingle(entity interface{}, expand string, handler ExpandHandler) map[string]interface{} {
+	result := EntityToMap(entity, expand)
 	if expand == "" {
 		return result
 	}
@@ -71,12 +71,7 @@ func ApplyExpandSingle(entity interface{}, expand string, handler ExpandHandler)
 		expandedEntity := handler.ExpandEntity(entity, relationshipName)
 		if expandedEntity != nil {
 			// Remove the existing field if it exists
-			for i, field := range result {
-				if field.Key == relationshipName {
-					result = append(result[:i], result[i+1:]...)
-					break
-				}
-			}
+			delete(result, relationshipName)
 
 			// Get the correct handler for the expanded entity
 			expandedEntityType := reflect.TypeOf(expandedEntity)
@@ -96,17 +91,17 @@ func ApplyExpandSingle(entity interface{}, expand string, handler ExpandHandler)
 				expandedValue := reflect.ValueOf(expandedEntity)
 				if expandedValue.Kind() == reflect.Slice {
 					log.Printf("Expanded entity is a slice with %d elements", expandedValue.Len())
-					// Convert each item in the slice to OrderedFields
-					expandedSlice := make([]OrderedFields, expandedValue.Len())
+					// Convert each item in the slice to map[string]interface{}
+					expandedSlice := make([]map[string]interface{}, expandedValue.Len())
 					for i := 0; i < expandedValue.Len(); i++ {
 						expandedSlice[i] = ApplyExpandSingle(expandedValue.Index(i).Interface(), nestedExpand, nestedHandler.ExpandHandler)
 					}
 					// Add the expanded result
-					result = append(result, struct{Key string; Value interface{}}{relationshipName, expandedSlice})
+					result[relationshipName] = expandedSlice
 				} else {
 					// Handle one-to-one relationship
-					expandedOrderedFields := ApplyExpandSingle(expandedEntity, nestedExpand, nestedHandler.ExpandHandler)
-					result = append(result, struct{Key string; Value interface{}}{relationshipName, expandedOrderedFields})
+					expandedMap := ApplyExpandSingle(expandedEntity, nestedExpand, nestedHandler.ExpandHandler)
+					result[relationshipName] = expandedMap
 				}
 			} else {
 				log.Printf("Expanded entity does not implement Entity interface")
@@ -202,53 +197,53 @@ func ApplySelect(entities interface{}, selectQuery string) interface{} {
 		log.Printf("ApplySelect: Processing entities of type: %s", entityType.Name())
 
 		entitiesValue := reflect.ValueOf(entities)
-		result := make([]OrderedFields, 0, entitiesValue.Len())
+		result := make([]map[string]interface{}, 0, entitiesValue.Len())
 		for i := 0; i < entitiesValue.Len(); i++ {
 			entity := entitiesValue.Index(i).Interface()
-			selectedEntity := ApplySelectSingle(EntityToOrderedFields(entity, ""), selectedFields)
+			selectedEntity := ApplySelectSingle(EntityToMap(entity, ""), selectedFields)
 			result = append(result, selectedEntity)
 		}
 		return result
 	} else {
 		log.Printf("ApplySelect: Processing single entity of type: %s", entitiesType.Name())
-		result := ApplySelectSingle(EntityToOrderedFields(entities, ""), selectedFields)
+		result := ApplySelectSingle(EntityToMap(entities, ""), selectedFields)
 		return result
 	}
 }
 
-func ApplySelectSingle(entity OrderedFields, selectedFields []string) OrderedFields {
+func ApplySelectSingle(entity map[string]interface{}, selectedFields []string) map[string]interface{} {
 	if len(selectedFields) == 0 {
 		return entity
 	}
 
-	result := make(OrderedFields, 0, len(selectedFields))
+	result := make(map[string]interface{})
 
-	for _, kv := range entity {
-		if isExpandedEntity(kv.Value) {
+	for key, value := range entity {
+		if isExpandedEntity(value) {
 			// Always include expanded entities
-			result = append(result, kv)
+			result[key] = value
 		} else {
 			for _, field := range selectedFields {
 				fieldParts := strings.Split(field, "/")
-				if strings.EqualFold(kv.Key, fieldParts[0]) {
+				if strings.EqualFold(key, fieldParts[0]) {
 					if len(fieldParts) > 1 {
 						// Handle nested selection
-						switch v := kv.Value.(type) {
-						case OrderedFields:
+						switch v := value.(type) {
+						case map[string]interface{}:
 							nestedResult := ApplySelectSingle(v, []string{strings.Join(fieldParts[1:], "/")})
-							result = append(result, struct{Key string; Value interface{}}{kv.Key, nestedResult})
-						case []OrderedFields:
-							nestedSlice := make([]OrderedFields, len(v))
+							result[key] = nestedResult
+						case []map[string]interface{}:
+							nestedSlice := make([]map[string]interface{}, len(v))
 							for i, item := range v {
 								nestedSlice[i] = ApplySelectSingle(item, []string{strings.Join(fieldParts[1:], "/")})
 							}
-							result = append(result, struct{Key string; Value interface{}}{kv.Key, nestedSlice})
+							result[key] = nestedSlice
 						default:
-							// If it's not an OrderedFields or []OrderedFields, just add it as is
-							result = append(result, kv)
+							// If it's not a map[string]interface{} or []map[string]interface{}, just add it as is
+							result[key] = value
 						}
 					} else {
-						result = append(result, kv)
+						result[key] = value
 					}
 					break
 				}
@@ -261,9 +256,47 @@ func ApplySelectSingle(entity OrderedFields, selectedFields []string) OrderedFie
 
 func isExpandedEntity(value interface{}) bool {
 	switch value.(type) {
-	case OrderedFields, []OrderedFields:
+	case map[string]interface{}, []map[string]interface{}:
 		return true
 	default:
 		return false
 	}
+}
+
+func EntityToMap(entity interface{}, expand string) map[string]interface{} {
+	// Check if the entity is already a map[string]interface{}
+	if m, ok := entity.(map[string]interface{}); ok {
+		return m
+	}
+
+	result := make(map[string]interface{})
+	entityValue := reflect.ValueOf(entity)
+	entityType := entityValue.Type()
+
+	// Handle pointer types
+	if entityValue.Kind() == reflect.Ptr {
+		entityValue = entityValue.Elem()
+		entityType = entityValue.Type()
+	}
+
+	// Handle struct types
+	if entityValue.Kind() == reflect.Struct {
+		for i := 0; i < entityValue.NumField(); i++ {
+			field := entityType.Field(i)
+			value := entityValue.Field(i).Interface()
+
+			// Use the json tag if available, otherwise use the field name
+			key := field.Tag.Get("json")
+			if key == "" {
+				key = field.Name
+			}
+
+			result[key] = value
+		}
+	} else {
+		// If it's not a struct or map, return an empty map
+		log.Printf("EntityToMap: Unsupported type %v", entityType)
+	}
+
+	return result
 }

@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"reflect"
+	"sort"
 	"strings"
 )
 
@@ -35,13 +36,30 @@ func EntityToOrderedFields(entity interface{}, expand string) OrderedFields {
 		}
 		return result
 
+	case reflect.Map:
+		keys := val.MapKeys()
+		result := make(OrderedFields, 0, len(keys))
+		
+		// Sort keys to ensure consistent order
+		sortedKeys := make([]string, len(keys))
+		for i, key := range keys {
+			sortedKeys[i] = key.String()
+		}
+		sort.Strings(sortedKeys)
+
+		for _, key := range sortedKeys {
+			value := val.MapIndex(reflect.ValueOf(key))
+			result = append(result, struct{Key string; Value interface{}}{key, value.Interface()})
+		}
+		return result
+
 	case reflect.Slice:
 		if orderedFields, ok := val.Interface().(OrderedFields); ok {
 			return orderedFields
 		}
 	}
 
-	// If it's not a struct or OrderedFields, return nil
+	// If it's not a struct, map, or OrderedFields, return nil
 	return nil
 }
 
@@ -101,13 +119,8 @@ func CreateODataResponseSingle(w http.ResponseWriter, entitySet string, entity i
 	var response OrderedFields
 	response = append(response, struct{Key string; Value interface{}}{"@odata.context", "$metadata#" + entitySet + "/$entity"})
 	
-	switch v := entity.(type) {
-	case OrderedFields:
-		response = append(response, v...)
-	default:
-		orderedEntity := EntityToOrderedFields(entity, "")
-		response = append(response, orderedEntity...)
-	}
+	orderedEntity := EntityToOrderedFields(entity, "")
+	response = append(response, orderedEntity...)
 	
 	encodeJSONPreserveOrder(w, response)
 }

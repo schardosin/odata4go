@@ -285,13 +285,38 @@ func EntityToMap(entity interface{}, expand string) map[string]interface{} {
 			field := entityType.Field(i)
 			value := entityValue.Field(i).Interface()
 
-			// Use the json tag if available, otherwise use the field name
-			key := field.Tag.Get("json")
+			// Parse the json tag
+			jsonTag := field.Tag.Get("json")
+			if jsonTag == "" {
+				// If no json tag, use the field name
+				result[field.Name] = value
+				continue
+			}
+
+			// Split the json tag
+			parts := strings.Split(jsonTag, ",")
+			key := parts[0]
+
+			// If the key is "-", skip this field
+			if key == "-" {
+				continue
+			}
+
+			// If the key is empty, use the field name
 			if key == "" {
 				key = field.Name
 			}
 
-			result[key] = value
+			// Check for omitempty
+			if len(parts) > 1 && parts[1] == "omitempty" {
+				// Only include non-zero values
+				if !isZeroValue(value) {
+					result[key] = value
+				}
+			} else {
+				// Always include the field
+				result[key] = value
+			}
 		}
 	} else {
 		// If it's not a struct or map, return an empty map
@@ -299,4 +324,9 @@ func EntityToMap(entity interface{}, expand string) map[string]interface{} {
 	}
 
 	return result
+}
+
+// Helper function to check if a value is the zero value for its type
+func isZeroValue(v interface{}) bool {
+	return reflect.DeepEqual(v, reflect.Zero(reflect.TypeOf(v)).Interface())
 }

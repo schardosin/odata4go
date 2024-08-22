@@ -102,3 +102,41 @@ func TestGetProductWithSelect(t *testing.T) {
 		})
 	}
 }
+
+func TestGetProductWithExpandAndSelect(t *testing.T) {
+	fmt.Println("")
+	fmt.Println("########## query_options_test - TestGetProductWithExpandAndSelect")
+	fmt.Println("")
+	r := setupTestRouter()
+
+	req, _ := http.NewRequest("GET", "/odata/v4/Products(1)?$expand=Category,Supplier&$select=ID,Description", nil)
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusOK, w.Code, "Expected status code %d, got %d", http.StatusOK, w.Code)
+
+	var response map[string]interface{}
+	err := json.Unmarshal(w.Body.Bytes(), &response)
+	assert.NoError(t, err)
+
+	assert.Equal(t, "$metadata#Products/$entity", response["@odata.context"], "Unexpected @odata.context: %v", response["@odata.context"])
+
+	assert.Contains(t, response, "ID", "Expected 'ID' field in response")
+	assert.Contains(t, response, "Description", "Expected 'Description' field in response")
+	assert.Contains(t, response, "Category", "Expected 'Category' field in response")
+	assert.Contains(t, response, "Supplier", "Expected 'Supplier' field in response")
+
+	category, ok := response["Category"].(map[string]interface{})
+	assert.True(t, ok, "Expected Category to be a map, got %T", response["Category"])
+	assert.Contains(t, category, "ID", "Expected 'ID' field in Category")
+	assert.Contains(t, category, "Name", "Expected 'Name' field in Category")
+
+	supplier, ok := response["Supplier"].(map[string]interface{})
+	assert.True(t, ok, "Expected Supplier to be a map, got %T", response["Supplier"])
+	assert.Contains(t, supplier, "ID", "Expected 'ID' field in Supplier")
+	assert.Contains(t, supplier, "Name", "Expected 'Name' field in Supplier")
+	assert.Contains(t, supplier, "Country", "Expected 'Country' field in Supplier")
+
+	assert.NotContains(t, response, "Name", "Unexpected 'Name' field in response")
+	assert.NotContains(t, response, "Price", "Unexpected 'Price' field in response")
+}

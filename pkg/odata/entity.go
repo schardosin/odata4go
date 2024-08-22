@@ -16,7 +16,7 @@ type EntityHandler struct {
 }
 
 type ExpandHandler interface {
-	ExpandEntity(entity interface{}, relationshipName string) interface{}
+	ExpandEntity(entity interface{}, relationshipName string, subQuery string) interface{}
 }
 
 // OrderedFields represents a slice of key-value pairs to maintain field order

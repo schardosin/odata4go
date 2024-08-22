@@ -51,7 +51,7 @@ var suppliers = []entities.Suppliers{
 
 type ProductExpandHandler struct{}
 
-func (h ProductExpandHandler) ExpandEntity(entity interface{}, relationshipName string) interface{} {
+func (h ProductExpandHandler) ExpandEntity(entity interface{}, relationshipName string, subQuery string) interface{} {
     product, ok := entity.(entities.Products)
     if !ok {
         return nil
@@ -76,7 +76,7 @@ func (h ProductExpandHandler) ExpandEntity(entity interface{}, relationshipName 
 
 type CategoryExpandHandler struct{}
 
-func (h CategoryExpandHandler) ExpandEntity(entity interface{}, relationshipName string) interface{} {
+func (h CategoryExpandHandler) ExpandEntity(entity interface{}, relationshipName string, subQuery string) interface{} {
     category, ok := entity.(entities.Categories)
     if !ok {
         return nil
@@ -97,7 +97,7 @@ func (h CategoryExpandHandler) ExpandEntity(entity interface{}, relationshipName
 
 type SupplierExpandHandler struct{}
 
-func (h SupplierExpandHandler) ExpandEntity(entity interface{}, relationshipName string) interface{} {
+func (h SupplierExpandHandler) ExpandEntity(entity interface{}, relationshipName string, subQuery string) interface{} {
     supplier, ok := entity.(entities.Suppliers)
     if !ok {
         return nil

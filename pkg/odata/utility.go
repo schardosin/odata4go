@@ -116,13 +116,7 @@ func CreateODataResponseSingle(w http.ResponseWriter, entitySet string, entity i
 	w.Header().Set("Content-Type", "application/json")
 	w.Header().Set("OData-Version", "4.0")
 	
-	var response OrderedFields
-	response = append(response, struct{Key string; Value interface{}}{"@odata.context", "$metadata#" + entitySet + "/$entity"})
-	
-	orderedEntity := EntityToOrderedFields(entity, "")
-	response = append(response, orderedEntity...)
-	
-	encodeJSONPreserveOrder(w, response)
+	encodeJSONPreserveOrder(w, entity)
 }
 
 // Helper function to encode JSON while preserving field order

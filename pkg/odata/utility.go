@@ -2,6 +2,7 @@ package odata
 
 import (
 	"encoding/json"
+	"log"
 	"net/http"
 	"reflect"
 	"sort"
@@ -115,8 +116,38 @@ func CreateODataResponse(w http.ResponseWriter, entitySet string, entities inter
 func CreateODataResponseSingle(w http.ResponseWriter, entitySet string, entity interface{}) {
 	w.Header().Set("Content-Type", "application/json")
 	w.Header().Set("OData-Version", "4.0")
+
+	// Log the type of the entity
+	log.Printf("CreateODataResponseSingle: Entity type: %T", entity)
 	
-	encodeJSONPreserveOrder(w, entity)
+	var orderedEntity OrderedFields
+	switch v := entity.(type) {
+	case OrderedFields:
+		log.Println("CreateODataResponseSingle: Entity is OrderedFields")
+		orderedEntity = v
+	case []OrderedFields:
+		log.Println("CreateODataResponseSingle: Entity is []OrderedFields")
+		if len(v) > 0 {
+			orderedEntity = v[0]
+		} else {
+			orderedEntity = make(OrderedFields, 0)
+		}
+	case map[string]interface{}:
+		log.Println("CreateODataResponseSingle: Entity is map[string]interface{}")
+		orderedEntity = make(OrderedFields, 0, len(v))
+		for key, value := range v {
+			orderedEntity = append(orderedEntity, struct{Key string; Value interface{}}{key, value})
+		}
+	default:
+		log.Printf("CreateODataResponseSingle: Entity is of type %T, converting to OrderedFields", v)
+		orderedEntity = EntityToOrderedFields(entity, "")
+	}
+
+	// Add @odata.context to the beginning of the OrderedFields
+	contextField := struct{Key string; Value interface{}}{"@odata.context", "$metadata#" + entitySet + "/$entity"}
+	orderedEntity = append(OrderedFields{contextField}, orderedEntity...)
+
+	encodeJSONPreserveOrder(w, orderedEntity)
 }
 
 // Helper function to encode JSON while preserving field order

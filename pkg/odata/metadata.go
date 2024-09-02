@@ -1,21 +1,11 @@
 package odata
 
 import (
-	"log"
-	"net/http"
 	"reflect"
 	"strings"
 )
 
-func handleGetMetadata(w http.ResponseWriter, r *http.Request) {
-	log.Println("Handling GET request for entitySet: $metadata")
-	w.Header().Set("Content-Type", "application/xml")
-	w.Header().Set("OData-Version", "4.0")
-	metadata := generateMetadata()
-	w.Write([]byte(metadata))
-}
-
-func generateMetadata() string {
+func GenerateMetadata() string {
 	edm := `<edmx:Edmx Version="4.0" xmlns:edmx="http://docs.oasis-open.org/odata/ns/edmx">
         <edmx:Reference Uri="https://sap.github.io/odata-vocabularies/vocabularies/Common.xml">
             <edmx:Include Alias="Common" Namespace="com.sap.vocabularies.Common.v1"/>

@@ -9,14 +9,14 @@ type Entity interface {
 	GetRelationships() map[string]string
 }
 
+type ExpandHandler interface {
+	ExpandEntity(entity interface{}, relationshipName string, subQuery string) interface{}
+}
+
 type EntityHandler struct {
 	GetEntityHandler     func(http.ResponseWriter, *http.Request)
 	GetEntityByIDHandler func(http.ResponseWriter, *http.Request, string)
-	ExpandHandler        ExpandHandler
-}
-
-type ExpandHandler interface {
-	ExpandEntity(entity interface{}, relationshipName string, subQuery string) interface{}
+	ExpandHandler
 }
 
 // OrderedFields represents a slice of key-value pairs to maintain field order
@@ -33,3 +33,15 @@ type RelationshipInfo struct {
 var entityTypes = []Entity{}
 var entityHandlers = make(map[string]EntityHandler)
 var entityRelationships = make(map[string]map[string]RelationshipInfo)
+
+func GetEntityHandler(entityName string) (EntityHandler, bool) {
+	handler, ok := entityHandlers[entityName]
+	return handler, ok
+}
+
+// DefaultExpandHandler is a fallback handler that does nothing
+type DefaultExpandHandler struct{}
+
+func (h DefaultExpandHandler) ExpandEntity(entity interface{}, relationshipName string, subQuery string) interface{} {
+	return nil
+}

@@ -13,7 +13,7 @@ type TestProducts struct {
 	Price       float64     `json:"Price"`
 	Category_ID  string      `json:"Category_ID" odata:"ref:Categories"`
 	Category    *TestCategories `json:"Category,omitempty" odata:"expand:Category"`
-	Supplier_ID  string      `json:"Supplier_ID" oSuppliers"`
+	Supplier_ID  string      `json:"Supplier_ID" odata:"ref:Suppliers"`
     Supplier     *TestSuppliers  `json:"Supplier,omitempty" odata:"expand:Supplier"`
 }
 
@@ -24,6 +24,7 @@ func (p TestProducts) EntityName() string {
 func (p TestProducts) GetRelationships() map[string]string {
 	return map[string]string{
 		"Category": "Categories",
+		"Supplier": "Suppliers",
 	}
 }
 
@@ -209,10 +210,33 @@ func setupTestRouter() *chi.Mux {
 		},
 		ExpandHandler: categoryHandler,
 	})
-	RegisterEntityRelationship("Products", "Category", "TestCategories", "one-to-one")
-	RegisterEntityRelationship("Products", "Supplier", "TestSuppliers", "one-to-one")
-	RegisterEntityRelationship("Categories", "Products", "TestProducts", "one-to-many")
-	RegisterEntityRelationship("Suppliers", "Products", "TestProducts", "one-to-many")
+
+	supplierHandler := TestSupplierExpandHandler{}
+	RegisterEntity(TestSuppliers{}, EntityHandler{
+		GetEntityHandler: func(w http.ResponseWriter, r *http.Request) {
+			result := ApplySkipTop(testSuppliers, r.URL.Query().Get("$skip"), r.URL.Query().Get("$top"))
+			result = ApplyExpand(result, r.URL.Query().Get("$expand"), supplierHandler)
+			result = ApplySelect(result, r.URL.Query().Get("$select"))
+			CreateODataResponse(w, "Suppliers", result)
+		},
+		GetEntityByIDHandler: func(w http.ResponseWriter, r *http.Request, id string) {
+			for _, supplier := range testSuppliers {
+				if supplier.ID == id {
+					result := ApplyExpand(supplier, r.URL.Query().Get("$expand"), supplierHandler)
+					result = ApplySelect(result, r.URL.Query().Get("$select"))
+					CreateODataResponseSingle(w, "Suppliers", result)
+					return
+				}
+			}
+			http.NotFound(w, r)
+		},
+		ExpandHandler: supplierHandler,
+	})
+
+	RegisterEntityRelationship("Products", "Category", "Categories", "one-to-one")
+	RegisterEntityRelationship("Products", "Supplier", "Suppliers", "one-to-one")
+	RegisterEntityRelationship("Categories", "Products", "Products", "one-to-many")
+	RegisterEntityRelationship("Suppliers", "Products", "Products", "one-to-many")
 	RegisterRoutes(r)
 	return r
 }

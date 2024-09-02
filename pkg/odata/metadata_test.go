@@ -55,7 +55,7 @@ func TestGenerateMetadata(t *testing.T) {
 	RegisterEntityRelationship("Products", "Category", "TestCategories", "one-to-one")
 	RegisterEntityRelationship("Categories", "Products", "TestProducts", "one-to-many")
 
-	metadata := generateMetadata()
+	metadata := GenerateMetadata()
 
 	// Parse the generated XML
 	var edmx struct {

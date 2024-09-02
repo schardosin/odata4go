@@ -7,10 +7,10 @@ import (
 )
 
 func RegisterEntity(entity Entity, handler EntityHandler) {
+	entityName := entity.EntityName()
+	entityHandlers[entityName] = handler
 	entityTypes = append(entityTypes, entity)
-	entitySetName := entity.EntityName()
-	entityHandlers[entitySetName] = handler
-	log.Printf("Registered entity: %s", entitySetName)
+	log.Printf("Registered entity: %s", entityName)
 }
 
 func RegisterEntityRelationship(entityName, relationshipName, targetEntityName, relationType string) {
@@ -28,6 +28,6 @@ func RegisterRoutes(router *chi.Mux) {
 	router.Get("/odata/v4/$metadata", handleGetMetadata)
 	router.Get("/odata/v4/{entitySet}", handleGetEntity)
 	router.Get("/odata/v4/{entitySet}({id})", handleGetEntityByID)
-	router.Get("/odata/v4/{entitySet}/{id}", handleGetEntityByID) // New route for single item with "/" support
+	router.Get("/odata/v4/{entitySet}/{id}", handleGetEntityByID)
 	log.Println("Registered OData routes")
 }

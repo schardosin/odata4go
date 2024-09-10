@@ -10,7 +10,7 @@ type Entity interface {
 }
 
 type ExpandHandler interface {
-	ExpandEntity(entity interface{}, relationshipName string, subQuery string) interface{}
+	ExpandEntity(entity OrderedFields, relationshipName string, subQuery string) interface{}
 }
 
 type EntityHandler struct {
@@ -20,9 +20,12 @@ type EntityHandler struct {
 }
 
 // OrderedFields represents a slice of key-value pairs to maintain field order
-type OrderedFields []struct {
-	Key   string
-	Value interface{}
+type OrderedFields struct {
+	EntityName string
+	Fields     []struct {
+		Key   string
+		Value interface{}
+	}
 }
 
 type RelationshipInfo struct {
@@ -42,6 +45,6 @@ func GetEntityHandler(entityName string) (EntityHandler, bool) {
 // DefaultExpandHandler is a fallback handler that does nothing
 type DefaultExpandHandler struct{}
 
-func (h DefaultExpandHandler) ExpandEntity(entity interface{}, relationshipName string, subQuery string) interface{} {
+func (h DefaultExpandHandler) ExpandEntity(entity OrderedFields, relationshipName string, subQuery string) interface{} {
 	return nil
 }

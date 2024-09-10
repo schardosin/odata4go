@@ -15,10 +15,20 @@ func EntityToOrderedFields(entity interface{}, expand string) OrderedFields {
 		val = val.Elem()
 	}
 
+	var entityName string
+	if e, ok := entity.(Entity); ok {
+		entityName = e.EntityName()
+	}
+	if e, ok := entity.(OrderedFields); ok {
+		entityName = e.EntityName
+	}
+
+	result := OrderedFields{EntityName: entityName}
+
 	switch val.Kind() {
 	case reflect.Struct:
 		typ := val.Type()
-		result := make(OrderedFields, 0, val.NumField())
+		result.Fields = make([]struct{Key string; Value interface{}}, 0, val.NumField())
 
 		for i := 0; i < val.NumField(); i++ {
 			field := typ.Field(i)
@@ -33,13 +43,12 @@ func EntityToOrderedFields(entity interface{}, expand string) OrderedFields {
 				}
 			}
 			
-			result = append(result, struct{Key string; Value interface{}}{field.Name, fieldValue.Interface()})
+			result.Fields = append(result.Fields, struct{Key string; Value interface{}}{field.Name, fieldValue.Interface()})
 		}
-		return result
 
 	case reflect.Map:
 		keys := val.MapKeys()
-		result := make(OrderedFields, 0, len(keys))
+		result.Fields = make([]struct{Key string; Value interface{}}, 0, len(keys))
 		
 		// Sort keys to ensure consistent order
 		sortedKeys := make([]string, len(keys))
@@ -50,18 +59,16 @@ func EntityToOrderedFields(entity interface{}, expand string) OrderedFields {
 
 		for _, key := range sortedKeys {
 			value := val.MapIndex(reflect.ValueOf(key))
-			result = append(result, struct{Key string; Value interface{}}{key, value.Interface()})
+			result.Fields = append(result.Fields, struct{Key string; Value interface{}}{key, value.Interface()})
 		}
-		return result
 
 	case reflect.Slice:
 		if orderedFields, ok := val.Interface().(OrderedFields); ok {
-			return orderedFields
+			result = orderedFields
 		}
 	}
 
-	// If it's not a struct, map, or OrderedFields, return nil
-	return nil
+	return result
 }
 
 // Helper function to check if a field is in the expand query
@@ -106,8 +113,10 @@ func CreateODataResponse(w http.ResponseWriter, entitySet string, entities inter
 	}
 
 	response := OrderedFields{
-		{Key: "@odata.context", Value: "$metadata#" + entitySet},
-		{Key: "value", Value: orderedEntities},
+		Fields: []struct{Key string; Value interface{}}{
+			{Key: "@odata.context", Value: "$metadata#" + entitySet},
+			{Key: "value", Value: orderedEntities},
+		},
 	}
 	encodeJSONPreserveOrder(w, response)
 }
@@ -130,13 +139,13 @@ func CreateODataResponseSingle(w http.ResponseWriter, entitySet string, entity i
 		if len(v) > 0 {
 			orderedEntity = v[0]
 		} else {
-			orderedEntity = make(OrderedFields, 0)
+			orderedEntity = OrderedFields{Fields: []struct{Key string; Value interface{}}{}}
 		}
 	case map[string]interface{}:
 		log.Println("CreateODataResponseSingle: Entity is map[string]interface{}")
-		orderedEntity = make(OrderedFields, 0, len(v))
+		orderedEntity = OrderedFields{Fields: make([]struct{Key string; Value interface{}}, 0, len(v))}
 		for key, value := range v {
-			orderedEntity = append(orderedEntity, struct{Key string; Value interface{}}{key, value})
+			orderedEntity.Fields = append(orderedEntity.Fields, struct{Key string; Value interface{}}{key, value})
 		}
 	default:
 		log.Printf("CreateODataResponseSingle: Entity is of type %T, converting to OrderedFields", v)
@@ -145,7 +154,7 @@ func CreateODataResponseSingle(w http.ResponseWriter, entitySet string, entity i
 
 	// Add @odata.context to the beginning of the OrderedFields
 	contextField := struct{Key string; Value interface{}}{"@odata.context", "$metadata#" + entitySet + "/$entity"}
-	orderedEntity = append(OrderedFields{contextField}, orderedEntity...)
+	orderedEntity.Fields = append([]struct{Key string; Value interface{}}{contextField}, orderedEntity.Fields...)
 
 	encodeJSONPreserveOrder(w, orderedEntity)
 }
@@ -161,7 +170,8 @@ func encodeJSONPreserveOrder(w http.ResponseWriter, v interface{}) error {
 func (of OrderedFields) MarshalJSON() ([]byte, error) {
 	var buf strings.Builder
 	buf.WriteString("{")
-	for i, kv := range of {
+	
+	for i, kv := range of.Fields {
 		if i > 0 {
 			buf.WriteString(",")
 		}

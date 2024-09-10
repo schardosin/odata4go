@@ -51,68 +51,93 @@ var suppliers = []entities.Suppliers{
 
 type ProductExpandHandler struct{}
 
-func (h ProductExpandHandler) ExpandEntity(entity interface{}, relationshipName string, subQuery string) interface{} {
-    product, ok := entity.(entities.Products)
-    if !ok {
-        return nil
+func (h ProductExpandHandler) ExpandEntity(entity odata.OrderedFields, relationshipName string, subQuery string) interface{} {
+    var product entities.Products
+    for _, field := range entity.Fields {
+        switch field.Key {
+        case "ID":
+            product.ID = field.Value.(string)
+        case "Category_ID":
+            product.Category_ID = field.Value.(string)
+        case "Supplier_ID":
+            product.Supplier_ID = field.Value.(string)
+        }
     }
 
+    var result interface{}
     switch relationshipName {
     case "Category":
         for _, category := range categories {
             if category.ID == product.Category_ID {
-                return category
+                result = odata.ApplySelect(category, subQuery)
+                return result
             }
         }
     case "Supplier":
         for _, supplier := range suppliers {
             if supplier.ID == product.Supplier_ID {
-                return supplier
+                result = odata.ApplySelect(supplier, subQuery)
+                return result
+
+                break
             }
         }
     }
+
     return nil
 }
 
 type CategoryExpandHandler struct{}
 
-func (h CategoryExpandHandler) ExpandEntity(entity interface{}, relationshipName string, subQuery string) interface{} {
-    category, ok := entity.(entities.Categories)
-    if !ok {
-        return nil
+func (h CategoryExpandHandler) ExpandEntity(entity odata.OrderedFields, relationshipName string, subQuery string) interface{} {
+    var categoryID string
+    for _, field := range entity.Fields {
+        if field.Key == "ID" {
+            categoryID = field.Value.(string)
+            break
+        }
     }
 
+    var result interface{}
     switch relationshipName {
     case "Products":
         var categoryProducts []entities.Products
         for _, product := range products {
-            if product.Category_ID == category.ID {
-                categoryProducts = append(categoryProducts, product)
+            if product.Category_ID == categoryID {
+                result = odata.ApplySelect(product, subQuery)
+                return result
             }
         }
-        return categoryProducts
+        result = categoryProducts
     }
+
     return nil
 }
 
 type SupplierExpandHandler struct{}
 
-func (h SupplierExpandHandler) ExpandEntity(entity interface{}, relationshipName string, subQuery string) interface{} {
-    supplier, ok := entity.(entities.Suppliers)
-    if !ok {
-        return nil
+func (h SupplierExpandHandler) ExpandEntity(entity odata.OrderedFields, relationshipName string, subQuery string) interface{} {
+    var supplierID string
+    for _, field := range entity.Fields {
+        if field.Key == "ID" {
+            supplierID = field.Value.(string)
+            break
+        }
     }
 
+    var result interface{}
     switch relationshipName {
     case "Products":
         var supplierProducts []entities.Products
         for _, product := range products {
-            if product.Supplier_ID == supplier.ID {
-                supplierProducts = append(supplierProducts, product)
+            if product.Supplier_ID == supplierID {
+                result = odata.ApplySelect(product, subQuery)
+                return result
             }
         }
-        return supplierProducts
+        result = supplierProducts
     }
+
     return nil
 }
 
@@ -121,15 +146,15 @@ func SetupRoutes() {
     odata.RegisterEntity(entities.Products{}, odata.EntityHandler{
         GetEntityHandler: func(w http.ResponseWriter, r *http.Request) {
             result := odata.ApplySkipTop(products, r.URL.Query().Get("$skip"), r.URL.Query().Get("$top"))
-            result = odata.ApplyExpand(result, r.URL.Query().Get("$expand"), productHandler)
-            result = odata.ApplySelect(result, r.URL.Query().Get("$select"))
+            result = odata.ApplyExpand(result, r.URL.RawQuery, productHandler)
+            result = odata.ApplySelect(result, r.URL.RawQuery)
             odata.CreateODataResponse(w, "Products", result)
         },
         GetEntityByIDHandler: func(w http.ResponseWriter, r *http.Request, id string) {
             for _, product := range products {
                 if product.ID == id {
-                    result := odata.ApplyExpand(product, r.URL.Query().Get("$expand"), productHandler)
-                    result = odata.ApplySelect(result, r.URL.Query().Get("$select"))
+                    result := odata.ApplyExpand(product, r.URL.RawQuery, productHandler)
+                    result = odata.ApplySelect(result, r.URL.RawQuery)
                     odata.CreateODataResponseSingle(w, "Products", result)
                     return
                 }
@@ -143,15 +168,15 @@ func SetupRoutes() {
     odata.RegisterEntity(entities.Categories{}, odata.EntityHandler{
         GetEntityHandler: func(w http.ResponseWriter, r *http.Request) {
             result := odata.ApplySkipTop(categories, r.URL.Query().Get("$skip"), r.URL.Query().Get("$top"))
-            result = odata.ApplyExpand(result, r.URL.Query().Get("$expand"), categoryHandler)
-            result = odata.ApplySelect(result, r.URL.Query().Get("$select"))
+            result = odata.ApplyExpand(result, r.URL.RawQuery, categoryHandler)
+            result = odata.ApplySelect(result, r.URL.RawQuery)
             odata.CreateODataResponse(w, "Categories", result)
         },
         GetEntityByIDHandler: func(w http.ResponseWriter, r *http.Request, id string) {
             for _, category := range categories {
                 if category.ID == id {
-                    result := odata.ApplyExpand(category, r.URL.Query().Get("$expand"), categoryHandler)
-                    result = odata.ApplySelect(result, r.URL.Query().Get("$select"))
+                    result := odata.ApplyExpand(category, r.URL.RawQuery, categoryHandler)
+                    result = odata.ApplySelect(result, r.URL.RawQuery)
                     odata.CreateODataResponseSingle(w, "Categories", result)
                     return
                 }
@@ -165,15 +190,15 @@ func SetupRoutes() {
     odata.RegisterEntity(entities.Suppliers{}, odata.EntityHandler{
         GetEntityHandler: func(w http.ResponseWriter, r *http.Request) {
             result := odata.ApplySkipTop(suppliers, r.URL.Query().Get("$skip"), r.URL.Query().Get("$top"))
-            result = odata.ApplyExpand(result, r.URL.Query().Get("$expand"), supplierHandler)
-            result = odata.ApplySelect(result, r.URL.Query().Get("$select"))
+            result = odata.ApplyExpand(result, r.URL.RawQuery, supplierHandler)
+            result = odata.ApplySelect(result, r.URL.RawQuery)
             odata.CreateODataResponse(w, "Suppliers", result)
         },
         GetEntityByIDHandler: func(w http.ResponseWriter, r *http.Request, id string) {
             for _, supplier := range suppliers {
                 if supplier.ID == id {
-                    result := odata.ApplyExpand(supplier, r.URL.Query().Get("$expand"), supplierHandler)
-                    result = odata.ApplySelect(result, r.URL.Query().Get("$select"))
+                    result := odata.ApplyExpand(supplier, r.URL.RawQuery, supplierHandler)
+                    result = odata.ApplySelect(result, r.URL.RawQuery)
                     odata.CreateODataResponseSingle(w, "Suppliers", result)
                     return
                 }
@@ -186,13 +211,13 @@ func SetupRoutes() {
     odata.RegisterEntity(entities.Customers{}, odata.EntityHandler{
         GetEntityHandler: func(w http.ResponseWriter, r *http.Request) {
             result := odata.ApplySkipTop(customers, r.URL.Query().Get("$skip"), r.URL.Query().Get("$top"))
-            result = odata.ApplySelect(result, r.URL.Query().Get("$select"))
+            result = odata.ApplySelect(result, r.URL.RawQuery)
             odata.CreateODataResponse(w, "Customers", result)
         },
         GetEntityByIDHandler: func(w http.ResponseWriter, r *http.Request, id string) {
             for _, customer := range customers {
                 if customer.ID == id {
-                    result := odata.ApplySelect(customer, r.URL.Query().Get("$select"))
+                    result := odata.ApplySelect(customer, r.URL.RawQuery)
                     odata.CreateODataResponseSingle(w, "Customers", result)
                     return
                 }

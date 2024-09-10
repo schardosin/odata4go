@@ -78,8 +78,6 @@ func (h ProductExpandHandler) ExpandEntity(entity odata.OrderedFields, relations
             if supplier.ID == product.Supplier_ID {
                 result = odata.ApplySelect(supplier, subQuery)
                 return result
-
-                break
             }
         }
     }
@@ -101,14 +99,14 @@ func (h CategoryExpandHandler) ExpandEntity(entity odata.OrderedFields, relation
     var result interface{}
     switch relationshipName {
     case "Products":
-        var categoryProducts []entities.Products
+        var categoryProducts []interface{}
         for _, product := range products {
             if product.Category_ID == categoryID {
                 result = odata.ApplySelect(product, subQuery)
-                return result
+                categoryProducts = append(categoryProducts, result)
             }
         }
-        result = categoryProducts
+        return categoryProducts
     }
 
     return nil
@@ -128,14 +126,14 @@ func (h SupplierExpandHandler) ExpandEntity(entity odata.OrderedFields, relation
     var result interface{}
     switch relationshipName {
     case "Products":
-        var supplierProducts []entities.Products
+        var supplierProducts []interface{}
         for _, product := range products {
             if product.Supplier_ID == supplierID {
                 result = odata.ApplySelect(product, subQuery)
-                return result
+                supplierProducts = append(supplierProducts, result)
             }
         }
-        result = supplierProducts
+        return supplierProducts
     }
 
     return nil

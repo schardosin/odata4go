@@ -100,23 +100,30 @@ var testSuppliers = []TestSuppliers{
 
 type TestProductHandler struct{}
 
-func (h TestProductHandler) ExpandEntity(entity interface{}, relationshipName string, subQuery string) interface{} {
-    product, ok := entity.(TestProducts)
-    if !ok {
-        return nil
+func (h TestProductHandler) ExpandEntity(entity OrderedFields, relationshipName string, subQuery string) interface{} {
+    var product TestProducts
+    for _, field := range entity.Fields {
+        switch field.Key {
+        case "ID":
+            product.ID = field.Value.(string)
+        case "Category_ID":
+            product.Category_ID = field.Value.(string)
+        case "Supplier_ID":
+            product.Supplier_ID = field.Value.(string)
+        }
     }
 
     switch relationshipName {
     case "Category":
         for _, category := range testCategories {
             if category.ID == product.Category_ID {
-                return category
+                return ApplySelect(category, subQuery)
             }
         }
     case "Supplier":
         for _, supplier := range testSuppliers {
             if supplier.ID == product.Supplier_ID {
-                return supplier
+                return ApplySelect(supplier, subQuery)
             }
         }
 	}
@@ -125,42 +132,48 @@ func (h TestProductHandler) ExpandEntity(entity interface{}, relationshipName st
 
 type TestCategoryExpandHandler struct{}
 
-func (h TestCategoryExpandHandler) ExpandEntity(entity interface{}, relationshipName string, subQuery string) interface{} {
-    category, ok := entity.(TestCategories)
-    if !ok {
-        return nil
+func (h TestCategoryExpandHandler) ExpandEntity(entity OrderedFields, relationshipName string, subQuery string) interface{} {
+    var categoryID string
+    for _, field := range entity.Fields {
+        if field.Key == "ID" {
+            categoryID = field.Value.(string)
+            break
+        }
     }
 
     switch relationshipName {
     case "Products":
         var categoryProducts []TestProducts
         for _, product := range testProducts {
-            if product.Category_ID == category.ID {
+            if product.Category_ID == categoryID {
                 categoryProducts = append(categoryProducts, product)
             }
         }
-        return categoryProducts
+        return ApplySelect(categoryProducts, subQuery)
     }
     return nil
 }
 
 type TestSupplierExpandHandler struct{}
 
-func (h TestSupplierExpandHandler) ExpandEntity(entity interface{}, relationshipName string, subQuery string) interface{} {
-    supplier, ok := entity.(TestSuppliers)
-    if !ok {
-        return nil
+func (h TestSupplierExpandHandler) ExpandEntity(entity OrderedFields, relationshipName string, subQuery string) interface{} {
+    var supplierID string
+    for _, field := range entity.Fields {
+        if field.Key == "ID" {
+            supplierID = field.Value.(string)
+            break
+        }
     }
 
     switch relationshipName {
     case "Products":
         var supplierProducts []TestProducts
         for _, product := range testProducts {
-            if product.Supplier_ID == supplier.ID {
+            if product.Supplier_ID == supplierID {
                 supplierProducts = append(supplierProducts, product)
             }
         }
-        return supplierProducts
+        return ApplySelect(supplierProducts, subQuery)
     }
     return nil
 }
@@ -171,15 +184,15 @@ func setupTestRouter() *chi.Mux {
 	RegisterEntity(TestProducts{}, EntityHandler{
 		GetEntityHandler: func(w http.ResponseWriter, r *http.Request) {
 			result := ApplySkipTop(testProducts, r.URL.Query().Get("$skip"), r.URL.Query().Get("$top"))
-			result = ApplyExpand(result, r.URL.Query().Get("$expand"), productHandler)
-			result = ApplySelect(result, r.URL.Query().Get("$select"))
+			result = ApplyExpand(result, r.URL.RawQuery, productHandler)
+			result = ApplySelect(result, r.URL.RawQuery)
 			CreateODataResponse(w, "Products", result)
 		},
 		GetEntityByIDHandler: func(w http.ResponseWriter, r *http.Request, id string) {
 			for _, product := range testProducts {
 				if product.ID == id {
-					result := ApplyExpand(product, r.URL.Query().Get("$expand"), productHandler)
-					result = ApplySelect(result, r.URL.Query().Get("$select"))
+					result := ApplyExpand(product, r.URL.RawQuery, productHandler)
+					result = ApplySelect(result, r.URL.RawQuery)
 					CreateODataResponseSingle(w, "Products", result)
 					return
 				}
@@ -193,15 +206,15 @@ func setupTestRouter() *chi.Mux {
 	RegisterEntity(TestCategories{}, EntityHandler{
 		GetEntityHandler: func(w http.ResponseWriter, r *http.Request) {
 			result := ApplySkipTop(testCategories, r.URL.Query().Get("$skip"), r.URL.Query().Get("$top"))
-			result = ApplyExpand(result, r.URL.Query().Get("$expand"), categoryHandler)
-			result = ApplySelect(result, r.URL.Query().Get("$select"))
+			result = ApplyExpand(result, r.URL.RawQuery, categoryHandler)
+			result = ApplySelect(result, r.URL.RawQuery)
 			CreateODataResponse(w, "Categories", result)
 		},
 		GetEntityByIDHandler: func(w http.ResponseWriter, r *http.Request, id string) {
 			for _, category := range testCategories {
 				if category.ID == id {
-					result := ApplyExpand(category, r.URL.Query().Get("$expand"), categoryHandler)
-					result = ApplySelect(result, r.URL.Query().Get("$select"))
+					result := ApplyExpand(category, r.URL.RawQuery, categoryHandler)
+					result = ApplySelect(result, r.URL.RawQuery)
 					CreateODataResponseSingle(w, "Categories", result)
 					return
 				}
@@ -215,15 +228,15 @@ func setupTestRouter() *chi.Mux {
 	RegisterEntity(TestSuppliers{}, EntityHandler{
 		GetEntityHandler: func(w http.ResponseWriter, r *http.Request) {
 			result := ApplySkipTop(testSuppliers, r.URL.Query().Get("$skip"), r.URL.Query().Get("$top"))
-			result = ApplyExpand(result, r.URL.Query().Get("$expand"), supplierHandler)
-			result = ApplySelect(result, r.URL.Query().Get("$select"))
+			result = ApplyExpand(result, r.URL.RawQuery, supplierHandler)
+			result = ApplySelect(result, r.URL.RawQuery)
 			CreateODataResponse(w, "Suppliers", result)
 		},
 		GetEntityByIDHandler: func(w http.ResponseWriter, r *http.Request, id string) {
 			for _, supplier := range testSuppliers {
 				if supplier.ID == id {
-					result := ApplyExpand(supplier, r.URL.Query().Get("$expand"), supplierHandler)
-					result = ApplySelect(result, r.URL.Query().Get("$select"))
+					result := ApplyExpand(supplier, r.URL.RawQuery, supplierHandler)
+					result = ApplySelect(result, r.URL.RawQuery)
 					CreateODataResponseSingle(w, "Suppliers", result)
 					return
 				}

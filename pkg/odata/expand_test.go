@@ -10,6 +10,33 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
+func TestExpandWithSelect(t *testing.T) {
+	r := setupTestRouter()
+
+	req, _ := http.NewRequest("GET", "/odata/v4/Products(1)?$expand=Category($select=ID)", nil)
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+
+	var response map[string]interface{}
+	err := json.Unmarshal(w.Body.Bytes(), &response)
+	assert.NoError(t, err)
+
+	assert.Equal(t, "$metadata#Products/$entity", response["@odata.context"])
+	assert.Equal(t, "1", response["ID"])
+	assert.Equal(t, "Product A", response["Name"])
+	assert.Equal(t, "Description A", response["Description"])
+	assert.Equal(t, float64(100), response["Price"])
+	assert.Equal(t, "1", response["Category_ID"])
+	assert.Equal(t, "1", response["Supplier_ID"])
+
+	category, ok := response["Category"].(map[string]interface{})
+	assert.True(t, ok, "Category should be a map")
+	assert.Equal(t, "1", category["ID"], "Category should only have ID field")
+	assert.Len(t, category, 1, "Category should only have one field")
+}
+
 func TestExpand(t *testing.T) {
 	fmt.Println("")
 	fmt.Println("########## expand_test - TestExpand")
